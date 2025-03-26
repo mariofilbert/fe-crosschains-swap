@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
   ArrowDown,
   ArrowRight,
@@ -12,23 +12,23 @@ import {
   LogOut,
   RefreshCw,
   Wallet,
-} from 'lucide-react';
-import Image from 'next/image';
-import { Button } from '@/components/ui/button';
+} from "lucide-react";
+import Image from "next/image";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
   CardFooter,
   CardHeader,
-} from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -36,15 +36,28 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 // new imports
-import { useAccount, useBalance, useDisconnect, useSwitchChain } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { mainnet, arbitrum, base, polygon, optimism } from 'wagmi/chains';
+import { useAccount, useBalance, useDisconnect, useSwitchChain } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { mainnet, arbitrum, base, polygon, optimism } from "wagmi/chains";
+import {
+  keccak256,
+  toHex,
+  stringToBytes,
+  erc20Abi,
+  pad,
+  encodeAbiParameters,
+  hexToBytes,
+} from "viem";
 
-import CustomConnectButton from '@/components/ui/custom-connectbutton';
+// tambahan
+import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import SpokeABI from "@/abis/SpokeABI.json";
+
+import CustomConnectButton from "@/components/ui/custom-connectbutton";
 
 // Define types for our data
 interface Token {
@@ -73,62 +86,62 @@ interface Chain {
 const chains: Chain[] = [
   {
     id: mainnet.id,
-    name: 'Ethereum',
-    logoUrl: '/placeholder.svg?height=24&width=24',
+    name: "Ethereum",
+    logoUrl: "/placeholder.svg?height=24&width=24",
   },
   {
     id: arbitrum.id,
-    name: 'Arbitrum',
-    logoUrl: '/placeholder.svg?height=24&width=24',
+    name: "Arbitrum",
+    logoUrl: "/placeholder.svg?height=24&width=24",
   },
   {
     id: base.id,
-    name: 'Base',
-    logoUrl: '/placeholder.svg?height=24&width=24',
+    name: "Base",
+    logoUrl: "/placeholder.svg?height=24&width=24",
   },
   {
     id: polygon.id,
-    name: 'Polygon',
-    logoUrl: '/placeholder.svg?height=24&width=24',
+    name: "Polygon",
+    logoUrl: "/placeholder.svg?height=24&width=24",
   },
   {
     id: optimism.id,
-    name: 'Optimism',
-    logoUrl: '/placeholder.svg?height=24&width=24',
+    name: "Optimism",
+    logoUrl: "/placeholder.svg?height=24&width=24",
   },
 ];
 
 const tokens: Token[] = [
   {
-    symbol: 'ETH',
-    name: 'Ethereum',
-    address: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
-    logoUrl: '/placeholder.svg?height=24&width=24',
-    balance: '0.5',
+    symbol: "ETH",
+    name: "Ethereum",
+    address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    logoUrl: "/placeholder.svg?height=24&width=24",
+    balance: "0.5",
     price: 3500,
   },
   {
-    symbol: 'USDC',
-    name: 'USD Coin',
-    address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
-    logoUrl: '/placeholder.svg?height=24&width=24',
-    balance: '1000',
+    symbol: "USDC",
+    name: "USD Coin",
+    address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+    logoUrl: "/placeholder.svg?height=24&width=24",
+    balance: "1000",
     price: 1,
   },
   {
-    symbol: 'USDT',
-    name: 'Tether',
-    address: '0xdac17f958d2ee523a2206206994597c13d831ec7',
-    logoUrl: '/placeholder.svg?height=24&width=24',
-    balance: '500',
+    symbol: "USDT",
+    name: "Tether",
+    address: "0xdac17f958d2ee523a2206206994597c13d831ec7",
+    logoUrl: "/placeholder.svg?height=24&width=24",
+    balance: "500",
     price: 1,
   },
   {
-    symbol: 'WBTC',
-    name: 'Wrapped Bitcoin',
-    address: '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599',
-    logoUrl: '/placeholder.svg?height=24&width=24',
-    balance: '0.01',
+    symbol: "WBTC",
+    name: "Wrapped Bitcoin",
+    address: "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+    logoUrl: "/placeholder.svg?height=24&width=24",
+    balance: "0.01",
     price: 62000,
   },
 ];
@@ -165,8 +178,8 @@ export default function CrossChainSwap() {
   const [destinationChain, setDestinationChain] = useState<Chain>(chains[2]); // Base
   const [sourceToken, setSourceToken] = useState<Token>(tokens[0]); // ETH
   const [destinationToken, setDestinationToken] = useState<Token>(tokens[0]); // ETH
-  const [sourceAmount, setSourceAmount] = useState<string>('0.1');
-  const [destinationAmount, setDestinationAmount] = useState<string>('0.099');
+  const [sourceAmount, setSourceAmount] = useState<string>("0.1");
+  const [destinationAmount, setDestinationAmount] = useState<string>("0.099");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   // const [isWalletConnected, setIsWalletConnected] = useState<boolean>(false);
   // const [walletAddress, setWalletAddress] = useState<string>('');
@@ -185,8 +198,8 @@ export default function CrossChainSwap() {
 
   // Calculate the exchange rate
   const exchangeRate = 0.99; // 1% fee example
-  const estimatedGas = '0.001 ETH';
-  const estimatedTime = '15 min';
+  const estimatedGas = "0.001 ETH";
+  const estimatedTime = "15 min";
 
   // const handleSwap = () => {
   //   if (!isWalletConnected) {
@@ -201,17 +214,96 @@ export default function CrossChainSwap() {
   //   }, 2000);
   // };
 
-  const handleSwap = () => {
-    if (!isConnected) {
-      return;
-    }
+  // ================================================
+  // ================================================
 
-    setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 2000);
+  const { writeContract, data, isPending } = useWriteContract();
+
+  const {
+    isSuccess,
+    isLoading: isLoadingSwap,
+    isError,
+  } = useWaitForTransactionReceipt({
+    hash: data,
+  });
+
+  const { address: wallet } = useAccount();
+
+  const handleSwap = async () => {
+    // struct OrderData {
+    // bytes32 sender;
+    // bytes32 recipient;
+    // bytes32 inputToken;
+    // bytes32 outputToken;
+    // uint256 amountIn;
+    // uint256 amountOut;
+    // uint256 senderNonce;
+    // uint32 originDomain;
+    // uint32 destinationDomain;
+    // bytes32 destinationSettler;
+    // uint32 fillDeadline;
+    // bytes data;
+
+    console.log(wallet);
+
+    const orderData = encodeAbiParameters(
+      [
+        { name: "sender", type: "bytes32" },
+        { name: "recipient", type: "bytes32" },
+        { name: "inputToken", type: "bytes32" },
+        { name: "outputToken", type: "bytes32" },
+        { name: "amountIn", type: "uint256" },
+        { name: "amountOut", type: "uint256" },
+        { name: "senderNonce", type: "uint256" },
+        { name: "originDomain", type: "uint32" },
+        { name: "destinationDomain", type: "uint32" },
+      ],
+      [
+        pad(wallet),
+        pad(wallet),
+        pad("0x930a3eE87F82134510a272655dfC0A7ae299B2Af"),
+        pad("0x930a3eE87F82134510a272655dfC0A7ae299B2Af"),
+        BigInt(1000000000000000000),
+        BigInt(990000000000000000),
+        BigInt(0),
+        1000,
+        10001,
+      ]
+    );
+
+    console.log(orderData);
+
+    await writeContract({
+      address: "0x99b0f318977b115293535Bf484ee406EaBd2c4F1",
+      abi: SpokeABI,
+      functionName: "open",
+      value: BigInt(0),
+      args: [
+        [
+          Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+          keccak256(toHex("orderData")),
+          orderData,
+        ],
+      ],
+    });
+
+    console.log("handleSwap");
   };
+
+  // ================================================
+  // ================================================
+
+  // const handleSwap = () => {
+  //   if (!isConnected) {
+  //     return;
+  //   }
+
+  //   setIsLoading(true);
+  //   // Simulate API call
+  //   setTimeout(() => {
+  //     setIsLoading(false);
+  //   }, 2000);
+  // };
 
   const handleSourceAmountChange = (value: string) => {
     setSourceAmount(value);
@@ -239,10 +331,10 @@ export default function CrossChainSwap() {
     // If connected and current chain matches source chain, use Wagmi balance
     if (isConnected && currentChain?.id === sourceChain.id) {
       // Convert Wagmi balance to token's decimal representation
-      return balanceData?.decimals || '0.0';
+      return balanceData?.decimals || "0.0";
     }
     // Fallback to token's predefined balance or "0.0"
-    return token.balance || '0.0';
+    return token.balance || "0.0";
   };
 
   /*************  ✨ Codeium Command ⭐  *************/
@@ -340,7 +432,7 @@ export default function CrossChainSwap() {
                         </span>
                       </div>
                       <div className="text-xs text-slate-400">
-                        2 hours ago •{' '}
+                        2 hours ago •{" "}
                         <a href="#" className="text-primary">
                           View on Explorer
                         </a>
@@ -361,7 +453,7 @@ export default function CrossChainSwap() {
                         </span>
                       </div>
                       <div className="text-xs text-slate-400">
-                        Yesterday •{' '}
+                        Yesterday •{" "}
                         <a href="#" className="text-primary">
                           View on Explorer
                         </a>
@@ -497,7 +589,7 @@ export default function CrossChainSwap() {
             <div className="text-sm text-slate-400">From</div>
             <div className="flex items-center space-x-2">
               <div className="text-sm text-slate-400">
-                Balance: {isConnected ? sourceToken.balance : '0.0'}{' '}
+                Balance: {isConnected ? sourceToken.balance : "0.0"}{" "}
                 {sourceToken.symbol}
               </div>
               <Button
@@ -529,7 +621,7 @@ export default function CrossChainSwap() {
                 >
                   <div className="flex items-center">
                     <Image
-                      src={sourceToken.logoUrl || '/placeholder.svg'}
+                      src={sourceToken.logoUrl || "/placeholder.svg"}
                       alt={sourceToken.symbol}
                       width={20}
                       height={20}
@@ -546,12 +638,12 @@ export default function CrossChainSwap() {
                     key={token.address}
                     onClick={() => setSourceToken(token)}
                     className={cn(
-                      'flex items-center gap-2 cursor-pointer hover:bg-slate-600',
-                      sourceToken.address === token.address && 'bg-slate-600'
+                      "flex items-center gap-2 cursor-pointer hover:bg-slate-600",
+                      sourceToken.address === token.address && "bg-slate-600"
                     )}
                   >
                     <Image
-                      src={token.logoUrl || '/placeholder.svg'}
+                      src={token.logoUrl || "/placeholder.svg"}
                       alt={token.symbol}
                       width={20}
                       height={20}
@@ -564,7 +656,7 @@ export default function CrossChainSwap() {
                       </span>
                     </div>
                     <div className="ml-auto text-xs text-slate-400">
-                      {isConnected ? token.balance : '0.0'}
+                      {isConnected ? token.balance : "0.0"}
                     </div>
                   </DropdownMenuItem>
                 ))}
@@ -580,7 +672,7 @@ export default function CrossChainSwap() {
               >
                 <div className="flex items-center">
                   <Image
-                    src={sourceChain.logoUrl || '/placeholder.svg'}
+                    src={sourceChain.logoUrl || "/placeholder.svg"}
                     alt={sourceChain.name}
                     width={16}
                     height={16}
@@ -597,12 +689,12 @@ export default function CrossChainSwap() {
                   key={chain.id}
                   onClick={() => setSourceChain(chain)}
                   className={cn(
-                    'flex items-center gap-2 cursor-pointer hover:bg-slate-600',
-                    sourceChain.id === chain.id && 'bg-slate-600'
+                    "flex items-center gap-2 cursor-pointer hover:bg-slate-600",
+                    sourceChain.id === chain.id && "bg-slate-600"
                   )}
                 >
                   <Image
-                    src={chain.logoUrl || '/placeholder.svg'}
+                    src={chain.logoUrl || "/placeholder.svg"}
                     alt={chain.name}
                     width={16}
                     height={16}
@@ -656,7 +748,7 @@ export default function CrossChainSwap() {
                 >
                   <div className="flex items-center">
                     <Image
-                      src={destinationToken.logoUrl || '/placeholder.svg'}
+                      src={destinationToken.logoUrl || "/placeholder.svg"}
                       alt={destinationToken.symbol}
                       width={20}
                       height={20}
@@ -673,13 +765,13 @@ export default function CrossChainSwap() {
                     key={token.address}
                     onClick={() => setDestinationToken(token)}
                     className={cn(
-                      'flex items-center gap-2 cursor-pointer hover:bg-slate-600',
+                      "flex items-center gap-2 cursor-pointer hover:bg-slate-600",
                       destinationToken.address === token.address &&
-                        'bg-slate-600'
+                        "bg-slate-600"
                     )}
                   >
                     <Image
-                      src={token.logoUrl || '/placeholder.svg'}
+                      src={token.logoUrl || "/placeholder.svg"}
                       alt={token.symbol}
                       width={20}
                       height={20}
@@ -705,7 +797,7 @@ export default function CrossChainSwap() {
               >
                 <div className="flex items-center">
                   <Image
-                    src={destinationChain.logoUrl || '/placeholder.svg'}
+                    src={destinationChain.logoUrl || "/placeholder.svg"}
                     alt={destinationChain.name}
                     width={16}
                     height={16}
@@ -722,12 +814,12 @@ export default function CrossChainSwap() {
                   key={chain.id}
                   onClick={() => setDestinationChain(chain)}
                   className={cn(
-                    'flex items-center gap-2 cursor-pointer hover:bg-slate-600',
-                    destinationChain.id === chain.id && 'bg-slate-600'
+                    "flex items-center gap-2 cursor-pointer hover:bg-slate-600",
+                    destinationChain.id === chain.id && "bg-slate-600"
                   )}
                 >
                   <Image
-                    src={chain.logoUrl || '/placeholder.svg'}
+                    src={chain.logoUrl || "/placeholder.svg"}
                     alt={chain.name}
                     width={16}
                     height={16}
@@ -809,8 +901,12 @@ export default function CrossChainSwap() {
           disabled={!isConnected || isLoading}
           onClick={handleSwap}
         >
-          {!isConnected ? 'Connect Wallet' : isLoading ? 'Swapping...' : 'Swap'}
+          {!isConnected ? "Connect Wallet" : isLoading ? "Swapping..." : "Swap"}
         </Button>
+        <Button className="w-full" onClick={handleSwap}>
+          {isPending ? "Swapping..." : "Swap Now"}
+        </Button>
+        {isLoadingSwap ? "Loading Swapping..." : ""}
       </CardFooter>
     </Card>
   );
